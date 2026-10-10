@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Inventario del Laboratorio</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='Style.css') }}">
+</head>
+
+<body>
+
+    <!-- ============================= -->
+    <!-- SIDEBAR -->
+    <!-- ============================= -->
+
+    <aside class="sidebar">
+
+        <div class="logo">
+
+           <img
+                src="{{ url_for('static', filename='img/logo-ies.jpg') }}"
+                alt="IES 9-018 Gobernador Celso A. Jaque"
+                class="logo-institucion"
+            >
+
+            <div class="nombre-sistema">
+                <h2>LAB STOCK</h2>
+                <p>Sistema de Gestión de Inventario</p>
+            </div>
+
+        </div>
+
+
+        <nav>
+
+            <a href="#" class="activo">
+                🏠 Inicio
+            </a>
+
+            <a href="#armarios">
+                🗄 Armarios
+            </a>
+
+            <a href="#inventario">
+                📦 Inventario
+            </a>
+
+            <a href="#pedidos">
+                📋 Pedidos
+            </a>
+
+            <a href="#">
+                ➕ Alta de material
+            </a>
+
+            <a href="#">
+                ➖ Baja de material
+            </a>
+
+            <a href="#">
+                📊 Movimientos
+            </a>
+
+        </nav>
+
+        <div class="usuario">
+            <p>IES 9-018</p>
+            <strong>Laboratorio</strong>
+        </div>
+
+    </aside>
+
+
+    <!-- ============================= -->
+    <!-- CONTENIDO -->
+    <!-- ============================= -->
+
+    <main class="contenido">
+
+        <!-- HEADER -->
+
+        <header>
+
+            <div>
+
+                <span class="institucion">
+                    IES 9-018 · Gobernador Celso A. Jaque
+                </span>
+
+                <h1>Gestión de Inventario del Laboratorio</h1>
+
+                <p>
+                    Control de stock, ubicación y preparación de materiales
+                </p>
+
+            </div>
+
+            <button
+                class="btn-principal"
+                id="btnNuevoPedido"
+            >
+                + Nuevo pedido
+            </button>
+
+        </header>
+
+
+        <!-- ============================= -->
+        <!-- RESUMEN -->
+        <!-- ============================= -->
+
+        <section class="resumen">
+
+            <div class="tarjeta">
+
+                <div>
+                    <p>Materiales registrados</p>
+                    <h2 id="totalMateriales">0</h2>
+                </div>
+
+                <span>📦</span>
+
+            </div>
+
+
+            <div class="tarjeta">
+
+                <div>
+                    <p>Armarios</p>
+                    <h2>12</h2>
+                </div>
+
+                <span>🗄</span>
+
+            </div>
+
+
+            <div class="tarjeta alerta">
+
+                <div>
+                    <p>Stock bajo</p>
+                    <h2 id="totalStockBajo">0</h2>
+                </div>
+
+                <span>⚠️</span>
+
+            </div>
+
+
+            <div class="tarjeta">
+
+                <div>
+                    <p>Pedidos pendientes</p>
+                    <h2 id="totalPedidos">0</h2>
+                </div>
+
+                <span>📋</span>
+
+            </div>
+
+        </section>
+
+
+        <!-- ============================= -->
+        <!-- ARMARIOS -->
+        <!-- ============================= -->
+
+        <section id="armarios">
+
+            <div class="titulo-seccion">
+
+                <div>
+
+                    <h2>Armarios del laboratorio</h2>
+
+                    <p>
+                        Seleccione un armario para consultar su contenido.
+                    </p>
+
+                </div>
+
+                <button
+                    class="btn-secundario oculto"
+                    id="btnMostrarTodos"
+                >
+                    Mostrar todos
+                </button>
+
+            </div>
+
+
+            <!-- LOS ARMARIOS SE GENERAN CON JAVASCRIPT -->
+
+            <div
+                class="grid-armarios"
+                id="contenedorArmarios"
+            ></div>
+
+        </section>
+
+
+        <!-- ============================= -->
+        <!-- INVENTARIO -->
+        <!-- ============================= -->
+
+        <section
+            id="inventario"
+            class="bloque"
+        >
+
+            <div class="titulo-seccion">
+
+                <div>
+
+                    <h2 id="tituloInventario">
+                        Inventario completo
+                    </h2>
+
+                    <p>
+                        Material registrado actualmente en el sistema.
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <!-- FILTROS -->
+
+            <div class="barra-filtros">
+
+                <input
+                    type="text"
+                    id="buscadorMaterial"
+                    placeholder="Buscar material o código..."
+                >
+
+
+                <select id="filtroArmario">
+
+                    <option value="">
+                        Todos los armarios
+                    </option>
+
+                    <option value="1">Armario 1</option>
+                    <option value="2">Armario 2</option>
+                    <option value="3">Armario 3</option>
+                    <option value="4">Armario 4</option>
+                    <option value="5">Armario 5</option>
+                    <option value="6">Armario 6</option>
+                    <option value="7">Armario 7</option>
+                    <option value="8">Armario 8</option>
+                    <option value="9">Armario 9</option>
+                    <option value="10">Armario 10</option>
+                    <option value="11">Armario 11</option>
+                    <option value="12">Armario 12</option>
+
+                </select>
+
+            </div>
+
+
+            <!-- TABLA -->
+
+            <div class="tabla-contenedor">
+
+                <table>
+
+                    <thead>
+
+                        <tr>
+
+                            <th>Código</th>
+
+                            <th>Material</th>
+
+                            <th>Armario</th>
+
+                            <th>Ubicación</th>
+
+                            <th>Stock</th>
+
+                            <th>Mínimo</th>
+
+                            <th>Estado</th>
+
+                        </tr>
+
+                    </thead>
+
+
+                    <tbody id="tablaInventario">
+
+                        <!-- JAVASCRIPT INSERTARÁ LOS DATOS -->
+
+                    </tbody>
+
+                </table>
+
+
+                <div
+                    class="estado-vacio"
+                    id="inventarioVacio"
+                >
+
+                    <span>📦</span>
+
+                    <h3>No hay materiales registrados</h3>
+
+                    <p>
+                        El inventario aparecerá aquí cuando conectemos
+                        la base de datos.
+                    </p>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- ============================= -->
+        <!-- PEDIDOS -->
+        <!-- ============================= -->
+
+        <section
+            id="pedidos"
+            class="bloque"
+        >
+
+            <div class="titulo-seccion">
+
+                <div>
+
+                    <h2>Pedidos para prácticas</h2>
+
+                    <p>
+                        Solicitudes de materiales para utilizar en el laboratorio.
+                    </p>
+
+                </div>
+
+                <button
+                    class="btn-principal"
+                    id="btnNuevoPedido2"
+                >
+                    + Crear pedido
+                </button>
+
+            </div>
+
+
+            <div
+                class="pedidos-grid"
+                id="contenedorPedidos"
+            ></div>
+
+
+            <div
+                class="estado-vacio"
+                id="pedidosVacio"
+            >
+
+                <span>📋</span>
+
+                <h3>No hay pedidos registrados</h3>
+
+                <p>
+                    Los nuevos pedidos aparecerán en esta sección.
+                </p>
+
+            </div>
+
+        </section>
+
+
+        <!-- ============================= -->
+        <!-- FOOTER -->
+        <!-- ============================= -->
+
+        <footer class="footer">
+
+            <p>
+                Estudiantes Logística 2do año 2026
+            </p>
+
+        </footer>
+
+    </main>
+
+
+    <!-- ============================= -->
+    <!-- MODAL NUEVO PEDIDO -->
+    <!-- ============================= -->
+
+    <div
+        class="modal"
+        id="modalPedido"
+    >
+
+        <div class="modal-contenido">
+
+            <div class="modal-header">
+
+                <div>
+
+                    <h2>Nuevo pedido</h2>
+
+                    <p>
+                        Solicitud de materiales para uso del laboratorio
+                    </p>
+
+                </div>
+
+                <button
+                    class="cerrar-modal"
+                    id="cerrarModal"
+                >
+                    ×
+                </button>
+
+            </div>
+
+
+            <form id="formPedido">
+
+                <div class="form-grid">
+
+                    <div class="campo">
+
+                        <label>
+                            Responsable
+                        </label>
+
+                        <input
+                            type="text"
+                            id="responsablePedido"
+                            required
+                        >
+
+                    </div>
+
+
+                    <div class="campo">
+
+                        <label>
+                            Materia / Práctica
+                        </label>
+
+                        <input
+                            type="text"
+                            id="practicaPedido"
+                            required
+                        >
+
+                    </div>
+
+
+                    <div class="campo">
+
+                        <label>
+                            Fecha de uso
+                        </label>
+
+                        <input
+                            type="date"
+                            id="fechaPedido"
+                            required
+                        >
+
+                    </div>
+
+                </div>
+
+
+                <hr>
+
+
+                <div class="titulo-materiales">
+
+                    <div>
+
+                        <h3>Materiales solicitados</h3>
+
+                        <p>
+                            Agregue los elementos necesarios.
+                        </p>
+
+                    </div>
+
+                    <button
+                        type="button"
+                        class="btn-secundario"
+                        id="btnAgregarMaterial"
+                    >
+                        + Agregar material
+                    </button>
+
+                </div>
+
+
+                <div id="materialesPedido"></div>
+
+
+                <div class="acciones-formulario">
+
+                    <button
+                        type="button"
+                        class="btn-cancelar"
+                        id="cancelarPedido"
+                    >
+                        Cancelar
+                    </button>
+
+                    <button
+                        type="submit"
+                        class="btn-principal"
+                    >
+                        Crear pedido
+                    </button>
+
+                </div>
+
+            </form>
+
+        </div>
+
+    </div>
+
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+
+</body>
+
+</html>
