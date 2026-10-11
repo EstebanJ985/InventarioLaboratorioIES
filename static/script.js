@@ -148,6 +148,23 @@ const contenedorPedidos =
 const pedidosVacio =
     document.getElementById("pedidosVacio");
 
+/* ALTA DE MATERIAL */
+
+const btnAltaMaterial =
+    document.getElementById("btnAltaMaterial");
+
+const modalAltaMaterial =
+    document.getElementById("modalAltaMaterial");
+
+const cerrarModalAlta =
+    document.getElementById("cerrarModalAlta");
+
+const cancelarAltaMaterial =
+    document.getElementById("cancelarAltaMaterial");
+
+const formAltaMaterial =
+    document.getElementById("formAltaMaterial");
+
 
 /* ======================================================
    ARMARIOS
@@ -422,21 +439,12 @@ function mostrarInventario() {
 
 
         if (producto.stock === 0) {
-
             estado = "Agotado";
-
             claseEstado = "critico";
-
         }
-
-        else if (
-            producto.stock <= producto.stockMinimo
-        ) {
-
+        else if (producto.stock <= producto.stock_minimo) {
             estado = "Stock bajo";
-
             claseEstado = "bajo";
-
         }
 
 
@@ -455,7 +463,8 @@ function mostrarInventario() {
             </td>
 
             <td>
-                ${producto.ubicacion || "-"}
+                ${producto.estante || "-"}
+                ${producto.sector ? " · " + producto.sector : ""}
             </td>
 
             <td>
@@ -463,18 +472,16 @@ function mostrarInventario() {
             </td>
 
             <td>
-                ${producto.stockMinimo}
+                ${producto.stock_minimo}
             </td>
 
             <td>
-
                 <span class="estado ${claseEstado}">
                     ${estado}
                 </span>
+        </td>
 
-            </td>
-
-        `;
+    `;  
 
 
         tablaInventario.appendChild(fila);
@@ -567,7 +574,7 @@ function actualizarResumen() {
         inventario.filter(producto =>
 
             producto.stock <=
-            producto.stockMinimo
+            producto.stock_minimo
 
         ).length;
 
@@ -628,6 +635,198 @@ function cerrarModalPedido() {
     materialesPedido.innerHTML = "";
 
 }
+
+
+/* ======================================================
+   MODAL ALTA DE MATERIAL
+====================================================== */
+
+function abrirModalAltaMaterial() {
+
+    modalAltaMaterial.classList.add("modal-activo");
+
+}
+
+
+function cerrarModalAltaMaterial() {
+
+    modalAltaMaterial.classList.remove("modal-activo");
+
+    formAltaMaterial.reset();
+
+}
+
+btnAltaMaterial.addEventListener(
+    "click",
+    evento => {
+
+        evento.preventDefault();
+
+        abrirModalAltaMaterial();
+
+    }
+);
+
+
+cerrarModalAlta.addEventListener(
+    "click",
+    cerrarModalAltaMaterial
+);
+
+
+cancelarAltaMaterial.addEventListener(
+    "click",
+    cerrarModalAltaMaterial
+);
+
+
+modalAltaMaterial.addEventListener(
+    "click",
+    evento => {
+
+        if (evento.target === modalAltaMaterial) {
+
+            cerrarModalAltaMaterial();
+
+        }
+
+    }
+);
+
+formAltaMaterial.addEventListener(
+    "submit",
+    async evento => {
+
+        evento.preventDefault();
+
+        console.log("Enviando alta de material...");
+
+        const nuevoMaterial = {
+
+            codigo:
+                document
+                    .getElementById("codigoMaterial")
+                    .value
+                    .trim(),
+
+            nombre:
+                document
+                    .getElementById("nombreMaterial")
+                    .value
+                    .trim(),
+
+            categoria:
+                document
+                    .getElementById("categoriaMaterial")
+                    .value
+                    .trim(),
+
+            unidad_medida:
+                document
+                    .getElementById("unidadMaterial")
+                    .value,
+
+            stock_minimo:
+                Number(
+                    document
+                        .getElementById("stockMinimoMaterial")
+                        .value
+                ),
+
+            cantidad:
+                Number(
+                    document
+                        .getElementById("cantidadMaterial")
+                        .value
+                ),
+
+            armario:
+                Number(
+                    document
+                        .getElementById("armarioMaterial")
+                        .value
+                ),
+
+            estante:
+                document
+                    .getElementById("estanteMaterial")
+                    .value
+                    .trim(),
+
+            sector:
+                document
+                    .getElementById("sectorMaterial")
+                    .value
+                    .trim(),
+
+            descripcion:
+                document
+                    .getElementById("descripcionMaterial")
+                    .value
+                    .trim()
+        };
+
+
+        try {
+
+            const respuesta = await fetch(
+                "/api/materiales",
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+
+                    body: JSON.stringify(nuevoMaterial)
+                }
+            );
+
+
+            const resultado =
+                await respuesta.json();
+
+
+            if (!respuesta.ok) {
+
+                throw new Error(
+                    resultado.error ||
+                    "No se pudo registrar el material"
+                );
+
+            }
+
+
+            mostrarNotificacion(
+                "Material registrado correctamente",
+                "success"
+
+            );
+
+
+            cerrarModalAltaMaterial();
+
+
+            await cargarInventario();
+
+
+        } catch (error) {
+
+            console.error(
+                "Error al registrar material:",
+                error
+            );
+
+
+            alert(
+                "Error al registrar el material: "
+                + error.message
+            );
+
+        }
+
+    }
+);
 
 
 /* ======================================================
@@ -882,7 +1081,7 @@ const productoId =
 
 const producto =
     inventario.find(
-        item => item.id === productoId
+        item => item.id_material === productoId
     );
 
 
@@ -913,7 +1112,7 @@ const armario =
 
             materiales.push({
 
-                productoId: producto.id,
+                productoId: producto.id_material,
 
                 codigo: producto.codigo,
 
@@ -921,7 +1120,8 @@ const armario =
 
                 armario: producto.armario,
 
-                ubicacion: producto.ubicacion,
+                ubicacion:
+                    `${producto.estante || ""}${producto.sector ? " · " + producto.sector : ""}`,
 
                 cantidad,
 
@@ -1188,9 +1388,8 @@ function buscarMaterialPedido(
 
             <span>
                 Armario ${producto.armario}
-                ${producto.ubicacion
-                    ? " · " + producto.ubicacion
-                    : ""}
+                ${producto.estante ? " · " + producto.estante : ""}
+                ${producto.sector ? " · " + producto.sector : ""}
             </span>
 
             <small>
@@ -1210,7 +1409,7 @@ function buscarMaterialPedido(
 
 
                 inputMaterial.dataset.productoId =
-                    producto.id;
+                    producto.id_material;
 
 
                 inputUbicacion.value =
@@ -1235,4 +1434,73 @@ function buscarMaterialPedido(
 
     });
 
+}
+
+/* ======================================================
+   NOTIFICACIONES
+====================================================== */
+
+function mostrarNotificacion(mensaje, tipo = "success") {
+
+    const notificacion =
+        document.createElement("div");
+
+    notificacion.classList.add(
+        "notificacion",
+        `notificacion-${tipo}`
+    );
+
+    notificacion.innerHTML = `
+
+        <div class="notificacion-icono">
+            ${tipo === "success" ? "✓" : "!"}
+        </div>
+
+        <div class="notificacion-contenido">
+
+            <strong>
+                ${tipo === "success"
+                    ? "Operación exitosa"
+                    : "Atención"}
+            </strong>
+
+            <span>
+                ${mensaje}
+            </span>
+
+        </div>
+
+        <button class="notificacion-cerrar">
+            ×
+        </button>
+
+    `;
+
+    document.body.appendChild(notificacion);
+
+    setTimeout(() => {
+        notificacion.classList.add(
+            "notificacion-visible"
+        );
+    }, 50);
+
+    const cerrar = () => {
+
+        notificacion.classList.remove(
+            "notificacion-visible"
+        );
+
+        setTimeout(() => {
+            notificacion.remove();
+        }, 300);
+    };
+
+    notificacion
+        .querySelector(".notificacion-cerrar")
+        .addEventListener(
+            "click",
+            cerrar
+        );
+
+    setTimeout(cerrar, 4000);
 }

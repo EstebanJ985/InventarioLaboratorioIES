@@ -21,7 +21,7 @@
         <div class="logo">
 
            <img
-                src="{{ url_for('static', filename='img/logo-ies.jpg') }}"
+                src="{{ url_for('static', filename='img/logo_ies.jpg') }}"
                 alt="IES 9-018 Gobernador Celso A. Jaque"
                 class="logo-institucion"
             >
@@ -52,7 +52,7 @@
                 📋 Pedidos
             </a>
 
-            <a href="#">
+            <a href="#" id="btnAltaMaterial">
                 ➕ Alta de material
             </a>
 
@@ -530,6 +530,266 @@
 
     </div>
 
+    <!-- ============================= -->
+<!-- MODAL ALTA DE MATERIAL -->
+<!-- ============================= -->
+
+<div class="modal" id="modalAltaMaterial">
+
+    <div class="modal-contenido">
+
+        <div class="modal-header">
+
+            <div>
+                <h2>Alta de material</h2>
+                <p>
+                    Registrar un nuevo material en el inventario.
+                </p>
+            </div>
+
+            <button
+                class="cerrar-modal"
+                id="cerrarModalAlta"
+            >
+                ×
+            </button>
+
+        </div>
+
+        <form id="formAltaMaterial">
+
+            <div class="form-grid">
+
+                <div class="campo">
+
+                    <label for="codigoMaterial">
+                        Código
+                    </label>
+
+                    <input
+                        type="text"
+                        id="codigoMaterial"
+                        placeholder="Ej: MAT-002"
+                        required
+                    >
+
+                </div>
+
+
+                <div class="campo">
+
+                    <label for="nombreMaterial">
+                        Nombre
+                    </label>
+
+                    <input
+                        type="text"
+                        id="nombreMaterial"
+                        placeholder="Nombre del material"
+                        required
+                    >
+
+                </div>
+
+
+                <div class="campo">
+
+                    <label for="categoriaMaterial">
+                        Categoría
+                    </label>
+
+                    <input
+                        type="text"
+                        id="categoriaMaterial"
+                        placeholder="Ej: Vidriería"
+                    >
+
+                </div>
+
+
+                <div class="campo">
+
+                    <label for="unidadMaterial">
+                        Unidad de medida
+                    </label>
+
+                    <select id="unidadMaterial">
+
+                        <option value="Unidad">
+                            Unidad
+                        </option>
+
+                        <option value="Caja">
+                            Caja
+                        </option>
+
+                        <option value="Paquete">
+                            Paquete
+                        </option>
+
+                        <option value="Litro">
+                            Litro
+                        </option>
+
+                        <option value="Mililitro">
+                            Mililitro
+                        </option>
+
+                        <option value="Metro">
+                            Metro
+                        </option>
+
+                        <option value="Kilogramo">
+                            Kilogramo
+                        </option>
+
+                        <option value="Gramo">
+                            Gramo
+                        </option>
+
+                    </select>
+
+                </div>
+
+
+                <div class="campo">
+
+                    <label for="stockMinimoMaterial">
+                        Stock mínimo
+                    </label>
+
+                    <input
+                        type="number"
+                        id="stockMinimoMaterial"
+                        min="0"
+                        value="0"
+                        required
+                    >
+
+                </div>
+
+
+                <div class="campo">
+
+                    <label for="cantidadMaterial">
+                        Cantidad inicial
+                    </label>
+
+                    <input
+                        type="number"
+                        id="cantidadMaterial"
+                        min="0"
+                        value="0"
+                        required
+                    >
+
+                </div>
+
+
+                <div class="campo">
+
+                    <label for="armarioMaterial">
+                        Armario
+                    </label>
+
+                    <select
+                        id="armarioMaterial"
+                        required
+                    >
+
+                        <option value="">
+                            Seleccionar armario
+                        </option>
+
+                        <option value="1">Armario 1</option>
+                        <option value="2">Armario 2</option>
+                        <option value="3">Armario 3</option>
+                        <option value="4">Armario 4</option>
+                        <option value="5">Armario 5</option>
+                        <option value="6">Armario 6</option>
+                        <option value="7">Armario 7</option>
+                        <option value="8">Armario 8</option>
+                        <option value="9">Armario 9</option>
+                        <option value="10">Armario 10</option>
+                        <option value="11">Armario 11</option>
+                        <option value="12">Armario 12</option>
+
+                    </select>
+
+                </div>
+
+
+                <div class="campo">
+
+                    <label for="estanteMaterial">
+                        Estante
+                    </label>
+
+                    <input
+                        type="text"
+                        id="estanteMaterial"
+                        placeholder="Ej: Estante 2"
+                    >
+
+                </div>
+
+
+                <div class="campo">
+
+                    <label for="sectorMaterial">
+                        Sector
+                    </label>
+
+                    <input
+                        type="text"
+                        id="sectorMaterial"
+                        placeholder="Ej: Sector B"
+                    >
+
+                </div>
+
+            </div>
+
+
+            <div class="campo campo-descripcion">
+
+                <label for="descripcionMaterial">
+                    Descripción
+                </label>
+
+                <textarea
+                    id="descripcionMaterial"
+                    rows="3"
+                    placeholder="Observaciones o descripción del material"
+                ></textarea>
+
+            </div>
+
+
+            <div class="acciones-formulario">
+
+                <button
+                    type="button"
+                    class="btn-cancelar"
+                    id="cancelarAltaMaterial"
+                >
+                    Cancelar
+                </button>
+
+                <button
+                    type="submit"
+                    class="btn-principal"
+                >
+                    Guardar material
+                </button>
+
+            </div>
+
+        </form>
+
+    </div>
+
+</div>
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 
