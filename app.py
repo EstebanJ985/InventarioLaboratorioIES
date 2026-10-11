@@ -165,5 +165,191 @@ def agregar_material():
 
         cursor.close()
 
+@app.route("/api/pedidos", methods=["POST"])
+def crear_pedido():
+
+    datos = request.get_json()
+
+    responsable = datos.get("responsable")
+    practica = datos.get("practica")
+    fecha_uso = datos.get("fecha")
+    materiales = datos.get("materiales", [])
+
+    cursor = conexion.cursor()
+
+    try:
+
+        consulta_pedido = """
+            INSERT INTO pedidos (
+                responsable,
+                practica,
+                fecha_uso
+            )
+            VALUES (%s, %s, %s)
+        """
+
+        cursor.execute(
+            consulta_pedido,
+            (
+                responsable,
+                practica,
+                fecha_uso
+            )
+        )
+
+        id_pedido = cursor.lastrowid
+
+        consulta_detalle = """
+            INSERT INTO detalle_pedido (
+                id_pedido,
+                id_material,
+                cantidad_solicitada
+            )
+            VALUES (%s, %s, %s)
+        """
+
+        for material in materiales:
+
+            cursor.execute(
+                consulta_detalle,
+                (
+                    id_pedido,
+                    material["productoId"],
+                    material["cantidad"]
+                )
+            )
+
+        conexion.commit()
+
+        return jsonify({
+            "mensaje": "Pedido creado correctamente",
+            "id_pedido": id_pedido
+        }), 201
+
+    except mysql.connector.Error as error:
+
+        conexion.rollback()
+
+        return jsonify({
+            "error": str(error)
+        }), 500
+
+    finally:
+
+        cursor.close()
+
+@app.route("/api/pedidos", methods=["GET"])
+def obtener_pedidos():
+
+    cursor = conexion.cursor(dictionary=True)
+
+    consulta = """
+        SELECT
+            p.id_pedido,
+            p.responsable,
+            p.practica,
+            p.fecha_uso,
+            p.estado,
+
+            d.id_material,
+            d.cantidad_solicitada,
+
+            m.codigo,
+            m.nombre,
+
+            a.numero AS armario,
+            u.estante,
+            u.sector
+
+        FROM pedidos AS p
+
+        JOIN detalle_pedido AS d
+            ON p.id_pedido = d.id_pedido
+
+        JOIN materiales AS m
+            ON d.id_material = m.id_material
+
+        JOIN stock AS s
+            ON m.id_material = s.id_material
+
+        JOIN ubicaciones AS u
+            ON s.id_ubicacion = u.id_ubicacion
+
+        JOIN armarios AS a
+            ON u.id_armario = a.id_armario
+
+        ORDER BY
+            p.id_pedido DESC,
+            a.numero ASC,
+            m.nombre ASC
+    """
+
+    cursor.execute(consulta)
+
+    filas = cursor.fetchall()
+
+    cursor.close()
+
+
+    pedidos = {}
+
+
+    for fila in filas:
+
+        id_pedido = fila["id_pedido"]
+
+
+        if id_pedido not in pedidos:
+
+            pedidos[id_pedido] = {
+
+                "id": id_pedido,
+
+                "responsable":
+                    fila["responsable"],
+
+                "practica":
+                    fila["practica"],
+
+                "fecha":
+                    fila["fecha_uso"].isoformat()
+                    if fila["fecha_uso"]
+                    else None,
+
+                "estado":
+                    fila["estado"],
+
+                "materiales": []
+
+            }
+
+
+        pedidos[id_pedido]["materiales"].append({
+
+            "productoId": fila["id_material"],
+
+            "codigo": fila["codigo"],
+
+            "nombre": fila["nombre"],
+
+            "cantidad": fila["cantidad_solicitada"],
+
+            "armario": fila["armario"],
+
+            "estante": fila["estante"],
+
+            "sector": fila["sector"]
+
+    })
+
+
+    return jsonify(list(pedidos.values()))
+
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(
+        host="127.0.0.1",
+        port=5000,
+        debug=False,
+        use_reloader=False,
+        threaded=False
+    )

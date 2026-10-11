@@ -62,6 +62,37 @@ async function cargarInventario() {
 
 }
 
+async function cargarPedidos() {
+
+    try {
+
+        const respuesta = await fetch("/api/pedidos");
+
+        if (!respuesta.ok) {
+
+            throw new Error(
+                "No se pudieron cargar los pedidos"
+            );
+
+        }
+
+        pedidos = await respuesta.json();
+
+        mostrarPedidos();
+
+        actualizarResumen();
+
+    } catch (error) {
+
+        console.error(
+            "Error al cargar pedidos:",
+            error
+        );
+
+    }
+
+}
+
 /* ======================================================
    ELEMENTOS HTML
 ====================================================== */
@@ -972,6 +1003,15 @@ function agregarFilaMaterial() {
         )
     );
 
+    inputMaterial.addEventListener(
+        "focus",
+        () => buscarMaterialPedido(
+            inputMaterial,
+            inputUbicacion,
+            sugerencias
+        )
+    );
+
 
     fila
         .querySelector(".eliminar-material")
@@ -1032,7 +1072,7 @@ btnAgregarMaterial.addEventListener(
 
 formPedido.addEventListener(
     "submit",
-    evento => {
+    async evento => {
 
 
         evento.preventDefault();
@@ -1166,18 +1206,63 @@ const armario =
         };
 
 
-        pedidos.push(nuevoPedido);
+        try {
+
+            const respuesta = await fetch(
+                "/api/pedidos",
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type": "application/json"
+                },
+
+                body: JSON.stringify(nuevoPedido)
+            }
+        );
 
 
-        mostrarPedidos();
+        const resultado =
+            await respuesta.json();
 
 
-        actualizarResumen();
+        if (!respuesta.ok) {
+
+            throw new Error(
+                resultado.error ||
+                "No se pudo crear el pedido"
+            );
+
+        }
+
+
+        mostrarNotificacion(
+            "Pedido creado correctamente",
+            "success"
+        );
 
 
         cerrarModalPedido();
 
+        await cargarPedidos();
+
+
+    } catch (error) {
+
+        console.error(
+            "Error al crear pedido:",
+            error
+        );
+
+
+        mostrarNotificacion(
+            "No se pudo crear el pedido",
+            "error"
+        );
+
     }
+
+        }
 );
 
 
@@ -1327,7 +1412,7 @@ function mostrarPedidos() {
 
 cargarInventario();
 
-mostrarPedidos();
+cargarPedidos();
 
 
 function buscarMaterialPedido(
@@ -1348,25 +1433,26 @@ function buscarMaterialPedido(
     inputUbicacion.value = "";
 
 
-    if (texto.length < 2) {
-        return;
-    }
-
-
     const resultados =
-        inventario.filter(producto =>
+        inventario.filter(producto => {
 
-            producto.nombre
-                .toLowerCase()
-                .includes(texto)
+            if (texto === "") {
+                return true;
+            }
 
-            ||
+            return (
+                producto.nombre
+                    .toLowerCase()
+                    .includes(texto)
 
-            producto.codigo
-                .toLowerCase()
-                .includes(texto)
+                ||
 
-        );
+                producto.codigo
+                    .toLowerCase()
+                    .includes(texto)
+            );
+
+        });
 
 
     resultados.forEach(producto => {
@@ -1393,8 +1479,7 @@ function buscarMaterialPedido(
             </span>
 
             <small>
-                Stock disponible:
-                ${producto.stock}
+                Stock disponible: ${producto.stock}
             </small>
 
         `;
@@ -1414,11 +1499,12 @@ function buscarMaterialPedido(
 
                 inputUbicacion.value =
                     `Armario ${producto.armario}` +
-                    (
-                        producto.ubicacion
-                            ? ` · ${producto.ubicacion}`
-                            : ""
-                    );
+                    (producto.estante
+                        ? ` · ${producto.estante}`
+                        : "") +
+                    (producto.sector
+                        ? ` · ${producto.sector}`
+                        : "");
 
 
                 contenedorSugerencias.innerHTML =
@@ -1433,6 +1519,38 @@ function buscarMaterialPedido(
         );
 
     });
+
+}
+
+
+async function cargarPedidos() {
+
+    try {
+
+        const respuesta = await fetch("/api/pedidos");
+
+        if (!respuesta.ok) {
+
+            throw new Error(
+                "No se pudieron cargar los pedidos"
+            );
+
+        }
+
+        pedidos = await respuesta.json();
+
+        mostrarPedidos();
+
+        actualizarResumen();
+
+    } catch (error) {
+
+        console.error(
+            "Error al cargar pedidos:",
+            error
+        );
+
+    }
 
 }
 
