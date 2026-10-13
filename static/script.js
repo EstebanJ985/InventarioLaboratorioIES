@@ -1421,6 +1421,19 @@ function mostrarPedidos() {
                     : ""
             }
 
+            ${
+                pedido.estado === "Entregado"
+                    ? `
+                        <button
+                            class="btn-devolver"
+                            data-id="${pedido.id}"
+                        >
+                            Registrar devolución
+                        </button>
+                    `
+                    : ""
+}
+
         `;
 
 
@@ -1461,6 +1474,31 @@ function mostrarPedidos() {
 
     });
 
+    const botonesDevolver =
+    document.querySelectorAll(
+        ".btn-devolver"
+    );
+
+
+    botonesDevolver.forEach(boton => {
+
+        boton.addEventListener(
+            "click",
+            () => {
+
+                const idPedido =
+                    Number(
+                        boton.dataset.id
+                    );
+
+                devolverPedido(
+                    idPedido
+                );
+
+            }
+        );
+
+});
 
     /* =========================================
        BOTONES ENTREGAR
@@ -1613,6 +1651,66 @@ async function entregarPedido(idPedido) {
 
 }
 
+/* ======================================================
+   DEVOLVER PEDIDO
+====================================================== */
+
+async function devolverPedido(idPedido) {
+
+    try {
+
+        const respuesta =
+            await fetch(
+                `/api/pedidos/${idPedido}/devolver`,
+                {
+                    method: "PATCH"
+                }
+            );
+
+
+        const resultado =
+            await respuesta.json();
+
+
+        if (!respuesta.ok) {
+
+            throw new Error(
+                resultado.error ||
+                "No se pudo devolver el pedido"
+            );
+
+        }
+
+
+        mostrarNotificacion(
+            "Pedido devuelto correctamente",
+            "success"
+        );
+
+
+        await cargarPedidos();
+
+        await cargarInventario();
+
+        await cargarMovimientos();
+
+
+    } catch (error) {
+
+        console.error(
+            "Error al devolver pedido:",
+            error
+        );
+
+
+        mostrarNotificacion(
+            error.message,
+            "error"
+        );
+
+    }
+
+}
 
 /* ======================================================
    PREPARAR PEDIDO
@@ -1718,13 +1816,8 @@ async function entregarPedido(idPedido) {
 }
 
 /* ======================================================
-   INICIALIZACIÓN
+   BUSCAR MATERIAL PARA PEDIDO
 ====================================================== */
-
-
-cargarInventario();
-
-cargarPedidos();
 
 
 function buscarMaterialPedido(
@@ -1832,14 +1925,32 @@ function buscarMaterialPedido(
 
     });
 
+
+
 }
 
+/* ======================================================
+   INICIALIZACIÓN
+====================================================== */
+
+    cargarInventario();
+
+    cargarPedidos();
+
+    cargarMovimientos();
+
+/* ======================================================
+   CARGAR PEDIDOS
+====================================================== */
 
 async function cargarPedidos() {
 
     try {
 
-        const respuesta = await fetch("/api/pedidos");
+        const respuesta =
+            await fetch(
+                "/api/pedidos"
+            );
 
         if (!respuesta.ok) {
 
@@ -1849,7 +1960,8 @@ async function cargarPedidos() {
 
         }
 
-        pedidos = await respuesta.json();
+        pedidos =
+            await respuesta.json();
 
         mostrarPedidos();
 
@@ -1865,6 +1977,146 @@ async function cargarPedidos() {
     }
 
 }
+
+
+/* ======================================================
+   CARGAR MOVIMIENTOS
+====================================================== */
+
+async function cargarMovimientos() {
+
+    try {
+
+        const respuesta =
+            await fetch(
+                "/api/movimientos"
+            );
+
+        const movimientos =
+            await respuesta.json();
+
+        if (!respuesta.ok) {
+
+            throw new Error(
+                movimientos.error ||
+                "No se pudieron cargar los movimientos"
+            );
+
+        }
+
+        mostrarMovimientos(
+            movimientos
+        );
+
+    } catch (error) {
+
+        console.error(
+            "Error al cargar movimientos:",
+            error
+        );
+
+        mostrarNotificacion(
+            error.message,
+            "error"
+        );
+
+    }
+
+}
+
+
+/* ======================================================
+   MOSTRAR MOVIMIENTOS
+====================================================== */
+
+function mostrarMovimientos(movimientos) {
+
+    const tabla =
+        document.getElementById(
+            "tablaMovimientos"
+        );
+
+    tabla.innerHTML = "";
+
+
+    movimientos.forEach(
+        movimiento => {
+
+            const fila =
+                document.createElement(
+                    "tr"
+                );
+
+
+            const ubicacion =
+                `${movimiento.estante || ""}${
+                    movimiento.sector
+                        ? " · " + movimiento.sector
+                        : ""
+                }`;
+
+
+            fila.innerHTML = `
+
+                <td>
+                    ${new Date(
+                        movimiento.fecha
+                    ).toLocaleString()}
+                </td>
+
+                <td>
+                    ${movimiento.tipo}
+                </td>
+
+                <td>
+                    ${movimiento.codigo}
+                </td>
+
+                <td>
+                    ${movimiento.material}
+                </td>
+
+                <td>
+                    ${movimiento.cantidad}
+                </td>
+
+                <td>
+                    Armario ${movimiento.armario}
+                </td>
+
+                <td>
+                    ${ubicacion}
+                </td>
+
+                <td>
+                    ${movimiento.responsable}
+                </td>
+
+                <td>
+                    ${
+                        movimiento.id_pedido
+                            ? `#${String(
+                                movimiento.id_pedido
+                            ).padStart(
+                                4,
+                                "0"
+                            )}`
+                            : "-"
+                    }
+                </td>
+
+            `;
+
+
+            tabla.appendChild(
+                fila
+            );
+
+        }
+    );
+
+}
+
 
 /* ======================================================
    NOTIFICACIONES

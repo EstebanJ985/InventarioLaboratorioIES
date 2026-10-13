@@ -708,6 +708,319 @@ def entregar_pedido(id_pedido):
         cursor.close()
 
 
+    # ======================================================
+# OBTENER MOVIMIENTOS
+# ======================================================
+
+@app.route(
+    "/api/movimientos",
+    methods=["GET"]
+)
+def obtener_movimientos():
+
+    cursor = conexion.cursor(
+        dictionary=True
+    )
+
+    try:
+
+        consulta = """
+            SELECT
+                movimientos.id_movimiento,
+                movimientos.tipo,
+                movimientos.cantidad,
+                movimientos.fecha,
+                movimientos.responsable,
+                movimientos.motivo,
+                movimientos.id_pedido,
+
+                materiales.codigo,
+                materiales.nombre AS material,
+
+                armarios.numero AS armario,
+                ubicaciones.estante,
+                ubicaciones.sector
+
+            FROM movimientos
+
+            JOIN materiales
+                ON movimientos.id_material =
+                   materiales.id_material
+
+            JOIN ubicaciones
+                ON movimientos.id_ubicacion =
+                   ubicaciones.id_ubicacion
+
+            JOIN armarios
+                ON ubicaciones.id_armario =
+                   armarios.id_armario
+
+            ORDER BY
+                movimientos.fecha DESC,
+                movimientos.id_movimiento DESC
+        """
+
+        cursor.execute(
+            consulta
+        )
+
+        movimientos = cursor.fetchall()
+
+        for movimiento in movimientos:
+
+            if movimiento["fecha"]:
+
+                movimiento["fecha"] = (
+                    movimiento["fecha"]
+                    .isoformat()
+                )
+
+        return jsonify(
+            movimientos
+        ), 200
+
+    except mysql.connector.Error as error:
+
+        return jsonify({
+            "error": str(error)
+        }), 500
+
+    finally:
+
+        cursor.close()
+
+
+@app.route(
+    "/api/pedidos/<int:id_pedido>/devolver",
+    methods=["PATCH"]
+)
+def devolver_pedido(id_pedido):
+    cursor = conexion.cursor()
+
+    try:
+
+        # =========================================
+        # 1. VERIFICAR PEDIDO
+        # =========================================
+
+        consulta_pedido = """
+            SELECT
+                responsable,
+                practica,
+                estado
+            FROM pedidos
+            WHERE id_pedido = %s
+        """
+
+        cursor.execute(
+            consulta_pedido,
+            (id_pedido,)
+        )
+
+        pedido = cursor.fetchone()
+
+        if pedido is None:
+
+            return jsonify({
+                "error": "El pedido no existe"
+            }), 404
+
+
+        responsable = pedido[0]
+        practica = pedido[1]
+        estado = pedido[2]
+
+
+        if estado != "Entregado":
+
+            return jsonify({
+                "error":
+                    "Solo se pueden devolver pedidos entregados"
+            }), 400
+
+
+        # =========================================
+        # 2. OBTENER MATERIALES ENTREGADOS
+        # =========================================
+
+        consulta_materiales = """
+            SELECT
+                detalle_pedido.id_material,
+                detalle_pedido.cantidad_entregada,
+                materiales.nombre
+            FROM detalle_pedido
+
+            JOIN materiales
+                ON detalle_pedido.id_material =
+                   materiales.id_material
+
+            WHERE detalle_pedido.id_pedido = %s
+        """
+
+        cursor.execute(
+            consulta_materiales,
+            (id_pedido,)
+        )
+
+        materiales_pedido = cursor.fetchall()
+
+
+        # =========================================
+        # 3. DEVOLVER STOCK
+        # =========================================
+
+        for material in materiales_pedido:
+
+            id_material = material[0]
+            cantidad_devuelta = material[1]
+            nombre = material[2]
+
+
+            if cantidad_devuelta <= 0:
+
+                continue
+
+
+            consulta_stock = """
+                SELECT
+                    id_stock,
+                    id_ubicacion
+                FROM stock
+                WHERE id_material = %s
+            """
+
+            cursor.execute(
+                consulta_stock,
+                (id_material,)
+            )
+
+            stock_actual = cursor.fetchone()
+
+
+            if stock_actual is None:
+
+                return jsonify({
+                    "error":
+                        f"No existe stock para {nombre}"
+                }), 400
+
+
+            id_stock = stock_actual[0]
+            id_ubicacion = stock_actual[1]
+
+
+            actualizar_stock = """
+                UPDATE stock
+                SET cantidad = cantidad + %s
+                WHERE id_stock = %s
+            """
+
+            cursor.execute(
+                actualizar_stock,
+                (
+                    cantidad_devuelta,
+                    id_stock
+                )
+            )
+
+
+            # =====================================
+            # 4. REGISTRAR MOVIMIENTO
+            # =====================================
+
+            registrar_movimiento = """
+                INSERT INTO movimientos (
+                    id_material,
+                    id_ubicacion,
+                    tipo,
+                    cantidad,
+                    responsable,
+                    motivo,
+                    id_pedido
+                )
+                VALUES (
+                    %s,
+                    %s,
+                    'Devolucion',
+                    %s,
+                    %s,
+                    %s,
+                    %s
+                )
+            """
+
+            cursor.execute(
+                registrar_movimiento,
+                (
+                    id_material,
+                    id_ubicacion,
+                    cantidad_devuelta,
+                    responsable,
+                    f"Devolución de pedido - {practica}",
+                    id_pedido
+                )
+            )
+
+
+            # =====================================
+            # 5. ACTUALIZAR DETALLE
+            # =====================================
+
+            actualizar_detalle = """
+                UPDATE detalle_pedido
+                SET cantidad_devuelta =
+                    cantidad_entregada
+                WHERE id_pedido = %s
+                AND id_material = %s
+            """
+
+            cursor.execute(
+                actualizar_detalle,
+                (
+                    id_pedido,
+                    id_material
+                )
+            )
+
+
+        # =========================================
+        # 6. CAMBIAR ESTADO
+        # =========================================
+
+        actualizar_pedido = """
+            UPDATE pedidos
+            SET estado = 'Devuelto'
+            WHERE id_pedido = %s
+        """
+
+        cursor.execute(
+            actualizar_pedido,
+            (id_pedido,)
+        )
+
+
+        conexion.commit()
+
+
+        return jsonify({
+            "mensaje":
+                "Pedido devuelto correctamente"
+        }), 200
+
+
+    except mysql.connector.Error as error:
+
+        conexion.rollback()
+
+        return jsonify({
+            "error": str(error)
+        }), 500
+
+
+    finally:
+
+        cursor.close()
+
 if __name__ == "__main__":
     app.run(
         host="127.0.0.1",
