@@ -1361,7 +1361,6 @@ tbody tr:hover {
 /* ========================================= */
 /* NOTIFICACIONES */
 /* ========================================= */
-
 .notificacion {
 
     position: fixed;
@@ -1402,6 +1401,37 @@ tbody tr:hover {
 }
 
 
+/* ======================================================
+   NOTIFICACIÓN EXITOSA
+====================================================== */
+
+.notificacion-success {
+
+    background-color: #edf9f1;
+
+    border: 1px solid #9bd8ae;
+
+    border-left: 6px solid #2e9d5b;
+
+    color: #2e9d5b;
+}
+
+
+/* ======================================================
+   NOTIFICACIÓN DE ERROR
+====================================================== */
+
+.notificacion-error {
+
+    background-color: #fff0f0;
+
+    border: 1px solid #f0aaaa;
+
+    border-left: 6px solid #d64545;
+
+    color: #d64545;
+}
+
 .notificacion-visible {
 
     opacity: 1;
@@ -1432,13 +1462,23 @@ tbody tr:hover {
 }
 
 
-.notificacion-success
-.notificacion-icono {
+/* ÍCONO DE ÉXITO */
 
-    background-color: var(--verde-claro);
+.notificacion-success .notificacion-icono {
 
-    color: var(--verde);
+    background-color: #d8f1e1;
 
+    color: #2e9d5b;
+}
+
+
+/* ÍCONO DE ERROR */
+
+.notificacion-error .notificacion-icono {
+
+    background-color: #ffdede;
+
+    color: #d64545;
 }
 
 
@@ -1472,6 +1512,36 @@ tbody tr:hover {
 
 }
 
+/* ========================================= */
+/* COLORES DE TEXTO SEGÚN TIPO */
+/* ========================================= */
+
+.notificacion-success
+.notificacion-contenido strong {
+
+    color: #176a3a;
+}
+
+
+.notificacion-success
+.notificacion-contenido span {
+
+    color: #347a50;
+}
+
+
+.notificacion-error
+.notificacion-contenido strong {
+
+    color: #8f1f1f;
+}
+
+
+.notificacion-error
+.notificacion-contenido span {
+
+    color: #a94444;
+}
 
 .notificacion-cerrar {
 

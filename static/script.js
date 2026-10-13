@@ -1074,71 +1074,54 @@ formPedido.addEventListener(
     "submit",
     async evento => {
 
-
         evento.preventDefault();
-
 
         const filas =
             document.querySelectorAll(
                 ".fila-material"
             );
 
-
         if (filas.length === 0) {
 
-            alert(
-                "Debe agregar al menos un material."
+            mostrarNotificacion(
+                "Debe agregar al menos un material.",
+                "error"
             );
 
             return;
-
         }
 
-
         const materiales = [];
-
+        let stockValido = true;
 
         filas.forEach(fila => {
 
+            const productoId =
+                Number(
+                    fila
+                        .querySelector(
+                            ".pedido-material"
+                        )
+                        .dataset.productoId
+                );
 
-            const nombre =
-                fila
-                    .querySelector(
-                        ".pedido-material"
-                    )
-                    .value;
+            const producto =
+                inventario.find(
+                    item =>
+                        item.id_material === productoId
+                );
 
+            if (!producto) {
 
-const productoId =
-    Number(
-        fila
-            .querySelector(
-                ".pedido-material"
-            )
-            .dataset.productoId
-    );
+                mostrarNotificacion(
+                    "Seleccione un material válido del inventario.",
+                    "error"
+                );
 
+                stockValido = false;
 
-const producto =
-    inventario.find(
-        item => item.id_material === productoId
-    );
-
-
-if (!producto) {
-
-    alert(
-        "Seleccione un material válido del inventario."
-    );
-
-    return;
-
-}
-
-
-const armario =
-    producto.armario;
-
+                return;
+            }
 
             const cantidad =
                 Number(
@@ -1149,28 +1132,64 @@ const armario =
                         .value
                 );
 
+            if (cantidad <= 0) {
+
+                mostrarNotificacion(
+                    "La cantidad solicitada debe ser mayor a 0.",
+                    "error"
+                );
+
+                stockValido = false;
+
+                return;
+            }
+
+            if (cantidad > producto.stock) {
+
+                mostrarNotificacion(
+                    `Stock insuficiente para ${producto.nombre}. Disponible: ${producto.stock}`,
+                    "error"
+                );
+
+                stockValido = false;
+
+                return;
+            }
 
             materiales.push({
 
-                productoId: producto.id_material,
+                productoId:
+                    producto.id_material,
 
-                codigo: producto.codigo,
+                codigo:
+                    producto.codigo,
 
-                nombre: producto.nombre,
+                nombre:
+                    producto.nombre,
 
-                armario: producto.armario,
+                armario:
+                    producto.armario,
 
                 ubicacion:
                     `${producto.estante || ""}${producto.sector ? " · " + producto.sector : ""}`,
 
                 cantidad,
 
-                stockDisponible: producto.stock
+                stockDisponible:
+                    producto.stock
 
             });
 
         });
 
+        /*
+            Si alguno de los materiales
+            no pasó las validaciones,
+            no se crea el pedido.
+        */
+        if (!stockValido) {
+            return;
+        }
 
         const nuevoPedido = {
 
@@ -1205,64 +1224,61 @@ const armario =
 
         };
 
-
         try {
 
-            const respuesta = await fetch(
-                "/api/pedidos",
-                {
-                    method: "POST",
+            const respuesta =
+                await fetch(
+                    "/api/pedidos",
+                    {
+                        method: "POST",
 
-                    headers: {
-                        "Content-Type": "application/json"
-                },
+                        headers: {
+                            "Content-Type":
+                                "application/json"
+                        },
 
-                body: JSON.stringify(nuevoPedido)
+                        body:
+                            JSON.stringify(
+                                nuevoPedido
+                            )
+                    }
+                );
+
+            const resultado =
+                await respuesta.json();
+
+            if (!respuesta.ok) {
+
+                throw new Error(
+                    resultado.error ||
+                    "No se pudo crear el pedido"
+                );
             }
-        );
 
+            mostrarNotificacion(
+                "Pedido creado correctamente",
+                "success"
+            );
 
-        const resultado =
-            await respuesta.json();
+            cerrarModalPedido();
 
+            await cargarPedidos();
 
-        if (!respuesta.ok) {
+        } catch (error) {
 
-            throw new Error(
-                resultado.error ||
-                "No se pudo crear el pedido"
+            console.error(
+                "Error al crear pedido:",
+                error
+            );
+
+            mostrarNotificacion(
+                error.message,
+                "error"
             );
 
         }
 
-
-        mostrarNotificacion(
-            "Pedido creado correctamente",
-            "success"
-        );
-
-
-        cerrarModalPedido();
-
-        await cargarPedidos();
-
-
-    } catch (error) {
-
-        console.error(
-            "Error al crear pedido:",
-            error
-        );
-
-
-        mostrarNotificacion(
-            "No se pudo crear el pedido",
-            "error"
-        );
-
     }
-
-        }
 );
 
 
@@ -1270,12 +1286,9 @@ const armario =
    MOSTRAR PEDIDOS
 ====================================================== */
 
-
 function mostrarPedidos() {
 
-
     contenedorPedidos.innerHTML = "";
-
 
     if (pedidos.length === 0) {
 
@@ -1283,9 +1296,7 @@ function mostrarPedidos() {
             "block";
 
         return;
-
     }
-
 
     pedidosVacio.style.display =
         "none";
@@ -1293,10 +1304,8 @@ function mostrarPedidos() {
 
     pedidos.forEach(pedido => {
 
-
         const tarjeta =
             document.createElement("div");
-
 
         tarjeta.classList.add("pedido");
 
@@ -1359,7 +1368,7 @@ function mostrarPedidos() {
 
                 </div>
 
-                <span class="pendiente">
+                <span class="${pedido.estado.toLowerCase()}">
                     ${pedido.estado}
                 </span>
 
@@ -1367,18 +1376,14 @@ function mostrarPedidos() {
 
 
             <p>
-
                 Responsable:
                 ${pedido.responsable}
-
             </p>
 
 
             <p>
-
                 Fecha:
                 ${pedido.fecha}
-
             </p>
 
 
@@ -1389,9 +1394,32 @@ function mostrarPedidos() {
             </div>
 
 
-            <button>
-                Preparar pedido
-            </button>
+            ${
+                pedido.estado === "Pendiente"
+                    ? `
+                        <button
+                            class="btn-preparar"
+                            data-id="${pedido.id}"
+                        >
+                            Preparar pedido
+                        </button>
+                    `
+                    : ""
+            }
+
+
+            ${
+                pedido.estado === "Preparado"
+                    ? `
+                        <button
+                            class="btn-entregar"
+                            data-id="${pedido.id}"
+                        >
+                            Entregar pedido
+                        </button>
+                    `
+                    : ""
+            }
 
         `;
 
@@ -1402,8 +1430,292 @@ function mostrarPedidos() {
 
     });
 
+
+    /* =========================================
+       BOTONES PREPARAR
+    ========================================= */
+
+    const botonesPreparar =
+        document.querySelectorAll(
+            ".btn-preparar"
+        );
+
+
+    botonesPreparar.forEach(boton => {
+
+        boton.addEventListener(
+            "click",
+            () => {
+
+                const idPedido =
+                    Number(
+                        boton.dataset.id
+                    );
+
+                prepararPedido(
+                    idPedido
+                );
+
+            }
+        );
+
+    });
+
+
+    /* =========================================
+       BOTONES ENTREGAR
+    ========================================= */
+
+    const botonesEntregar =
+        document.querySelectorAll(
+            ".btn-entregar"
+        );
+
+
+    botonesEntregar.forEach(boton => {
+
+        boton.addEventListener(
+            "click",
+            () => {
+
+                const idPedido =
+                    Number(
+                        boton.dataset.id
+                    );
+
+                entregarPedido(
+                    idPedido
+                );
+
+            }
+        );
+
+    });
+
 }
 
+
+/* ======================================================
+   PREPARAR PEDIDO
+====================================================== */
+
+async function prepararPedido(idPedido) {
+
+    try {
+
+        const respuesta =
+            await fetch(
+                `/api/pedidos/${idPedido}/preparar`,
+                {
+                    method: "PATCH"
+                }
+            );
+
+
+        const resultado =
+            await respuesta.json();
+
+
+        if (!respuesta.ok) {
+
+            throw new Error(
+                resultado.error ||
+                "No se pudo preparar el pedido"
+            );
+
+        }
+
+
+        mostrarNotificacion(
+            "Pedido preparado correctamente",
+            "success"
+        );
+
+
+        await cargarPedidos();
+
+
+    } catch (error) {
+
+        console.error(
+            "Error al preparar pedido:",
+            error
+        );
+
+
+        mostrarNotificacion(
+            error.message,
+            "error"
+        );
+
+    }
+
+}
+
+
+/* ======================================================
+   ENTREGAR PEDIDO
+====================================================== */
+
+async function entregarPedido(idPedido) {
+
+    try {
+
+        const respuesta =
+            await fetch(
+                `/api/pedidos/${idPedido}/entregar`,
+                {
+                    method: "PATCH"
+                }
+            );
+
+
+        const resultado =
+            await respuesta.json();
+
+
+        if (!respuesta.ok) {
+
+            throw new Error(
+                resultado.error ||
+                "No se pudo entregar el pedido"
+            );
+
+        }
+
+
+        mostrarNotificacion(
+            "Pedido entregado correctamente",
+            "success"
+        );
+
+
+        await cargarPedidos();
+
+
+        await cargarInventario();
+
+
+    } catch (error) {
+
+        console.error(
+            "Error al entregar pedido:",
+            error
+        );
+
+
+        mostrarNotificacion(
+            error.message,
+            "error"
+        );
+
+    }
+
+}
+
+
+/* ======================================================
+   PREPARAR PEDIDO
+====================================================== */
+
+async function prepararPedido(idPedido) {
+
+    try {
+
+        const respuesta =
+            await fetch(
+                `/api/pedidos/${idPedido}/preparar`,
+                {
+                    method: "PATCH"
+                }
+            );
+
+        const resultado =
+            await respuesta.json();
+
+        if (!respuesta.ok) {
+
+            throw new Error(
+                resultado.error ||
+                "No se pudo preparar el pedido"
+            );
+        }
+
+        mostrarNotificacion(
+            "Pedido preparado correctamente",
+            "success"
+        );
+
+        await cargarPedidos();
+
+    } catch (error) {
+
+        console.error(
+            "Error al preparar pedido:",
+            error
+        );
+
+        mostrarNotificacion(
+            error.message,
+            "error"
+        );
+
+    }
+
+}
+
+
+/* ======================================================
+   ENTREGAR PEDIDO
+====================================================== */
+
+async function entregarPedido(idPedido) {
+
+    try {
+
+        const respuesta =
+            await fetch(
+                `/api/pedidos/${idPedido}/entregar`,
+                {
+                    method: "PATCH"
+                }
+            );
+
+        const resultado =
+            await respuesta.json();
+
+        if (!respuesta.ok) {
+
+            throw new Error(
+                resultado.error ||
+                "No se pudo entregar el pedido"
+            );
+        }
+
+        mostrarNotificacion(
+            "Pedido entregado correctamente",
+            "success"
+        );
+
+        await cargarPedidos();
+
+        await cargarInventario();
+
+    } catch (error) {
+
+        console.error(
+            "Error al entregar pedido:",
+            error
+        );
+
+        mostrarNotificacion(
+            error.message,
+            "error"
+        );
+
+    }
+
+}
 
 /* ======================================================
    INICIALIZACIÓN

@@ -179,6 +179,49 @@ def crear_pedido():
 
     try:
 
+                # VALIDAR STOCK ANTES DE CREAR EL PEDIDO
+        for material in materiales:
+
+            id_material = material.get("productoId")
+            cantidad_solicitada = material.get("cantidad", 0)
+
+            if cantidad_solicitada <= 0:
+                return jsonify({
+                    "error": "La cantidad solicitada debe ser mayor a 0"
+                }), 400
+
+            consulta_stock = """
+                SELECT
+                    materiales.nombre,
+                    stock.cantidad
+                FROM stock
+                JOIN materiales
+                    ON stock.id_material = materiales.id_material
+                WHERE materiales.id_material = %s
+            """
+
+            cursor.execute(
+                consulta_stock,
+                (id_material,)
+            )
+
+            resultado_stock = cursor.fetchone()
+
+            if resultado_stock is None:
+                return jsonify({
+                    "error": "El material solicitado no existe"
+                }), 404
+
+            nombre_material = resultado_stock[0]
+            stock_disponible = resultado_stock[1]
+
+            if cantidad_solicitada > stock_disponible:
+                return jsonify({
+                    "error":
+                        f"Stock insuficiente para {nombre_material}. "
+                        f"Disponible: {stock_disponible}"
+                }), 400
+
         consulta_pedido = """
             INSERT INTO pedidos (
                 responsable,
@@ -344,6 +387,326 @@ def obtener_pedidos():
 
 
     return jsonify(list(pedidos.values()))
+
+
+@app.route(
+    "/api/pedidos/<int:id_pedido>/preparar",
+    methods=["PATCH"]
+)
+def preparar_pedido(id_pedido):
+
+    cursor = conexion.cursor()
+
+    try:
+
+        consulta = """
+            UPDATE pedidos
+            SET estado = 'Preparado'
+            WHERE id_pedido = %s
+            AND estado = 'Pendiente'
+        """
+
+        cursor.execute(
+            consulta,
+            (id_pedido,)
+        )
+
+        if cursor.rowcount == 0:
+
+            return jsonify({
+                "error":
+                    "El pedido no existe o ya no está pendiente"
+            }), 400
+
+        conexion.commit()
+
+        return jsonify({
+            "mensaje":
+                "Pedido preparado correctamente"
+        }), 200
+
+    except mysql.connector.Error as error:
+
+        conexion.rollback()
+
+        return jsonify({
+            "error": str(error)
+        }), 500
+
+    finally:
+
+        cursor.close()
+
+
+@app.route(
+    "/api/pedidos/<int:id_pedido>/entregar",
+    methods=["PATCH"]
+)
+def entregar_pedido(id_pedido):
+
+    cursor = conexion.cursor()
+
+    try:
+
+        # =========================================
+        # 1. VERIFICAR QUE EL PEDIDO ESTÉ PREPARADO
+        # =========================================
+
+        consulta_pedido = """
+            SELECT
+                responsable,
+                practica,
+                estado
+            FROM pedidos
+            WHERE id_pedido = %s
+        """
+
+        cursor.execute(
+            consulta_pedido,
+            (id_pedido,)
+        )
+
+        pedido = cursor.fetchone()
+
+        if pedido is None:
+
+            return jsonify({
+                "error": "El pedido no existe"
+            }), 404
+
+
+        responsable = pedido[0]
+        practica = pedido[1]
+        estado = pedido[2]
+
+
+        if estado != "Preparado":
+
+            return jsonify({
+                "error":
+                    "Solo se pueden entregar pedidos preparados"
+            }), 400
+
+
+        # =========================================
+        # 2. OBTENER LOS MATERIALES DEL PEDIDO
+        # =========================================
+
+        consulta_materiales = """
+            SELECT
+                detalle_pedido.id_material,
+                detalle_pedido.cantidad_solicitada,
+                materiales.nombre
+            FROM detalle_pedido
+
+            JOIN materiales
+                ON detalle_pedido.id_material =
+                   materiales.id_material
+
+            WHERE detalle_pedido.id_pedido = %s
+        """
+
+        cursor.execute(
+            consulta_materiales,
+            (id_pedido,)
+        )
+
+        materiales_pedido = cursor.fetchall()
+
+
+        # =========================================
+        # 3. VALIDAR STOCK
+        # =========================================
+
+        for material in materiales_pedido:
+
+            id_material = material[0]
+            cantidad = material[1]
+            nombre = material[2]
+
+            consulta_stock = """
+                SELECT
+                    id_stock,
+                    cantidad,
+                    id_ubicacion
+                FROM stock
+                WHERE id_material = %s
+            """
+
+            cursor.execute(
+                consulta_stock,
+                (id_material,)
+            )
+
+            stock_actual = cursor.fetchone()
+
+            if stock_actual is None:
+
+                return jsonify({
+                    "error":
+                        f"No existe stock para {nombre}"
+                }), 400
+
+
+            cantidad_disponible = stock_actual[1]
+
+
+            if cantidad > cantidad_disponible:
+
+                return jsonify({
+                    "error":
+                        f"Stock insuficiente para {nombre}. "
+                        f"Disponible: {cantidad_disponible}"
+                }), 400
+
+
+        # =========================================
+        # 4. DESCONTAR STOCK
+        # =========================================
+
+        for material in materiales_pedido:
+
+            id_material = material[0]
+            cantidad = material[1]
+
+            consulta_stock = """
+                SELECT
+                    id_stock,
+                    cantidad,
+                    id_ubicacion
+                FROM stock
+                WHERE id_material = %s
+            """
+
+            cursor.execute(
+                consulta_stock,
+                (id_material,)
+            )
+
+            stock_actual = cursor.fetchone()
+
+
+            id_stock = stock_actual[0]
+
+            id_ubicacion = stock_actual[2]
+
+
+            actualizar_stock = """
+                UPDATE stock
+                SET cantidad = cantidad - %s
+                WHERE id_stock = %s
+            """
+
+            cursor.execute(
+                actualizar_stock,
+                (
+                    cantidad,
+                    id_stock
+                )
+            )
+
+
+            # =====================================
+            # 5. REGISTRAR MOVIMIENTO DE SALIDA
+            # =====================================
+
+            registrar_movimiento = """
+                INSERT INTO movimientos (
+                id_material,
+                id_ubicacion,
+                tipo,
+                cantidad,
+                responsable,
+                motivo,
+                id_pedido
+            )
+            VALUES (
+                %s,
+                %s,
+                'Salida',
+                %s,
+                %s,
+                %s,
+                %s
+            )
+        """
+
+            cursor.execute(
+                registrar_movimiento,
+                (
+                    id_material,
+                    id_ubicacion,
+                    cantidad,
+                    responsable,
+                    f"Entrega de pedido - {practica}",
+                    id_pedido
+                )
+            )
+
+
+            # =====================================
+            # 6. MARCAR CANTIDAD ENTREGADA
+            # =====================================
+
+            actualizar_detalle = """
+                UPDATE detalle_pedido
+                SET cantidad_entregada =
+                    cantidad_solicitada
+                WHERE id_pedido = %s
+                AND id_material = %s
+            """
+
+            cursor.execute(
+                actualizar_detalle,
+                (
+                    id_pedido,
+                    id_material
+                )
+            )
+
+
+        # =========================================
+        # 7. CAMBIAR ESTADO DEL PEDIDO
+        # =========================================
+
+        actualizar_pedido = """
+            UPDATE pedidos
+            SET estado = 'Entregado'
+            WHERE id_pedido = %s
+        """
+
+        cursor.execute(
+            actualizar_pedido,
+            (id_pedido,)
+        )
+
+
+        # =========================================
+        # 8. CONFIRMAR TODO
+        # =========================================
+
+        conexion.commit()
+
+
+        return jsonify({
+            "mensaje":
+                "Pedido entregado correctamente"
+        }), 200
+
+
+    except mysql.connector.Error as error:
+
+        conexion.rollback()
+
+        return jsonify({
+            "error": str(error)
+        }), 500
+
+
+    finally:
+
+        cursor.close()
+
 
 if __name__ == "__main__":
     app.run(
