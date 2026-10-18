@@ -6,6 +6,8 @@ load_dotenv()
 from flask import Flask, jsonify, render_template, request
 import mysql.connector
 
+from decimal import Decimal, InvalidOperation
+
 app = Flask(__name__)
 
 # Conexión con MySQL
@@ -28,6 +30,7 @@ def obtener_inventario():
 
     consulta = """
         SELECT
+            materiales.unidad_medida,
             materiales.id_material,
             materiales.codigo,
             materiales.nombre,
@@ -175,29 +178,70 @@ def crear_pedido():
     fecha_uso = datos.get("fecha")
     materiales = datos.get("materiales", [])
 
+    if not materiales:
+
+        return jsonify({
+            "error": "Debe agregar al menos un material"
+        }), 400
+
+
     cursor = conexion.cursor()
 
     try:
 
-                # VALIDAR STOCK ANTES DE CREAR EL PEDIDO
+        # ==================================================
+        # 1. VALIDAR STOCK DISPONIBLE
+        # ==================================================
+
         for material in materiales:
 
             id_material = material.get("productoId")
-            cantidad_solicitada = material.get("cantidad", 0)
+
+            try:
+
+                cantidad_solicitada = Decimal(
+                    str(
+                        material.get(
+                            "cantidad",
+                            0
+                        )
+                    )
+                )
+
+            except (
+                InvalidOperation,
+                TypeError,
+                ValueError
+            ):
+
+                return jsonify({
+                    "error":
+                        "La cantidad solicitada no es válida"
+                }), 400
+
 
             if cantidad_solicitada <= 0:
+
                 return jsonify({
-                    "error": "La cantidad solicitada debe ser mayor a 0"
+                    "error":
+                        "La cantidad solicitada debe ser mayor a 0"
                 }), 400
+
 
             consulta_stock = """
                 SELECT
                     materiales.nombre,
-                    stock.cantidad
+                    stock.cantidad,
+                    stock.cantidad_reservada
                 FROM stock
+
                 JOIN materiales
-                    ON stock.id_material = materiales.id_material
+                    ON stock.id_material =
+                       materiales.id_material
+
                 WHERE materiales.id_material = %s
+
+                FOR UPDATE
             """
 
             cursor.execute(
@@ -207,20 +251,48 @@ def crear_pedido():
 
             resultado_stock = cursor.fetchone()
 
+
             if resultado_stock is None:
-                return jsonify({
-                    "error": "El material solicitado no existe"
-                }), 404
 
-            nombre_material = resultado_stock[0]
-            stock_disponible = resultado_stock[1]
-
-            if cantidad_solicitada > stock_disponible:
                 return jsonify({
                     "error":
-                        f"Stock insuficiente para {nombre_material}. "
+                        "El material solicitado no existe"
+                }), 404
+
+
+            nombre_material = resultado_stock[0]
+
+            stock_fisico = (
+                resultado_stock[1]
+                or Decimal("0")
+            )
+
+            stock_reservado = (
+                resultado_stock[2]
+                or Decimal("0")
+            )
+
+            stock_disponible = (
+                stock_fisico -
+                stock_reservado
+            )
+
+
+            if cantidad_solicitada > stock_disponible:
+
+                return jsonify({
+
+                    "error":
+                        f"Stock disponible insuficiente "
+                        f"para {nombre_material}. "
                         f"Disponible: {stock_disponible}"
+
                 }), 400
+
+
+        # ==================================================
+        # 2. CREAR PEDIDO
+        # ==================================================
 
         consulta_pedido = """
             INSERT INTO pedidos (
@@ -242,6 +314,11 @@ def crear_pedido():
 
         id_pedido = cursor.lastrowid
 
+
+        # ==================================================
+        # 3. CREAR DETALLES
+        # ==================================================
+
         consulta_detalle = """
             INSERT INTO detalle_pedido (
                 id_pedido,
@@ -251,23 +328,66 @@ def crear_pedido():
             VALUES (%s, %s, %s)
         """
 
+
+        # ==================================================
+        # 4. RESERVAR STOCK
+        # ==================================================
+
+        consulta_reserva = """
+            UPDATE stock
+            SET cantidad_reservada =
+                cantidad_reservada + %s
+            WHERE id_material = %s
+        """
+
+
         for material in materiales:
+
+            id_material = material["productoId"]
+
+            cantidad_solicitada = Decimal(
+                str(
+                    material["cantidad"]
+                )
+            )
+
 
             cursor.execute(
                 consulta_detalle,
                 (
                     id_pedido,
-                    material["productoId"],
-                    material["cantidad"]
+                    id_material,
+                    cantidad_solicitada
                 )
             )
 
+
+            cursor.execute(
+                consulta_reserva,
+                (
+                    cantidad_solicitada,
+                    id_material
+                )
+            )
+
+
+        # ==================================================
+        # 5. CONFIRMAR TRANSACCIÓN
+        # ==================================================
+
         conexion.commit()
 
+
         return jsonify({
-            "mensaje": "Pedido creado correctamente",
-            "id_pedido": id_pedido
+
+            "mensaje":
+                "Pedido creado y stock reservado correctamente",
+
+            "id_pedido":
+                id_pedido
+
         }), 201
+
 
     except mysql.connector.Error as error:
 
@@ -276,6 +396,7 @@ def crear_pedido():
         return jsonify({
             "error": str(error)
         }), 500
+
 
     finally:
 
@@ -299,6 +420,7 @@ def obtener_pedidos():
 
             m.codigo,
             m.nombre,
+            m.unidad_medida,
 
             a.numero AS armario,
             u.estante,
@@ -381,7 +503,9 @@ def obtener_pedidos():
 
             "estante": fila["estante"],
 
-            "sector": fila["sector"]
+            "sector": fila["sector"],
+
+            "unidad_medida": fila["unidad_medida"]
 
     })
 
@@ -736,6 +860,7 @@ def obtener_movimientos():
 
                 materiales.codigo,
                 materiales.nombre AS material,
+                materiales.unidad_medida,
 
                 armarios.numero AS armario,
                 ubicaciones.estante,
@@ -795,9 +920,31 @@ def obtener_movimientos():
     methods=["PATCH"]
 )
 def devolver_pedido(id_pedido):
+
     cursor = conexion.cursor()
 
     try:
+
+        datos = request.get_json()
+
+        if not datos:
+
+            return jsonify({
+                "error":
+                    "No se recibieron datos de devolución"
+            }), 400
+
+
+        devoluciones = datos.get("devoluciones", [])
+
+
+        if not devoluciones:
+
+            return jsonify({
+                "error":
+                    "Debe indicar al menos una devolución"
+            }), 400
+
 
         # =========================================
         # 1. VERIFICAR PEDIDO
@@ -819,10 +966,12 @@ def devolver_pedido(id_pedido):
 
         pedido = cursor.fetchone()
 
+
         if pedido is None:
 
             return jsonify({
-                "error": "El pedido no existe"
+                "error":
+                    "El pedido no existe"
             }), 404
 
 
@@ -831,55 +980,120 @@ def devolver_pedido(id_pedido):
         estado = pedido[2]
 
 
-        if estado != "Entregado":
+        if estado not in (
+            "Entregado",
+            "Devuelto"
+        ):
 
             return jsonify({
                 "error":
-                    "Solo se pueden devolver pedidos entregados"
+                    "Solo se pueden devolver materiales de pedidos entregados"
             }), 400
 
 
-        # =========================================
-        # 2. OBTENER MATERIALES ENTREGADOS
-        # =========================================
-
-        consulta_materiales = """
-            SELECT
-                detalle_pedido.id_material,
-                detalle_pedido.cantidad_entregada,
-                materiales.nombre
-            FROM detalle_pedido
-
-            JOIN materiales
-                ON detalle_pedido.id_material =
-                   materiales.id_material
-
-            WHERE detalle_pedido.id_pedido = %s
-        """
-
-        cursor.execute(
-            consulta_materiales,
-            (id_pedido,)
-        )
-
-        materiales_pedido = cursor.fetchall()
+        hubo_devolucion = False
 
 
         # =========================================
-        # 3. DEVOLVER STOCK
+        # 2. PROCESAR CADA MATERIAL
         # =========================================
 
-        for material in materiales_pedido:
+        for devolucion in devoluciones:
 
-            id_material = material[0]
-            cantidad_devuelta = material[1]
-            nombre = material[2]
+            id_material = devolucion.get(
+                    "id_material"
+                )
 
 
-            if cantidad_devuelta <= 0:
+            try:
 
+                cantidad_nueva = Decimal(
+                    str(
+                        devolucion.get(
+                            "cantidad_devuelta",
+                            0
+                        )
+                    )
+                )
+
+            except (
+                InvalidOperation,
+                TypeError
+            ):
+
+                return jsonify({
+                    "error":
+                        "Cantidad de devolución inválida"
+                }), 400
+
+
+            if cantidad_nueva < 0:
+
+                return jsonify({
+                    "error":
+                        "La cantidad devuelta no puede ser negativa"
+                }), 400
+
+
+            # Si devolvió 0, simplemente
+            # pasamos al siguiente material.
+
+            if cantidad_nueva == 0:
                 continue
 
+
+            # =====================================
+            # 3. OBTENER DETALLE DEL PEDIDO
+            # =====================================
+
+            consulta_detalle = """
+                SELECT
+                    cantidad_entregada,
+                    cantidad_devuelta
+                FROM detalle_pedido
+                WHERE id_pedido = %s
+                AND id_material = %s
+            """
+
+            cursor.execute(
+                consulta_detalle,
+                (
+                    id_pedido,
+                    id_material
+                )
+            )
+
+            detalle = cursor.fetchone()
+
+
+            if detalle is None:
+
+                return jsonify({
+                    "error":
+                        "El material no pertenece al pedido"
+                }), 400
+
+
+            cantidad_entregada = detalle[0]
+
+            cantidad_ya_devuelta = detalle[1] or Decimal("0")
+
+
+            cantidad_pendiente = cantidad_entregada - cantidad_ya_devuelta
+
+
+            if cantidad_nueva > cantidad_pendiente:
+
+                return jsonify({
+                    "error":
+                        "La cantidad devuelta supera "
+                        "la cantidad pendiente de devolución"
+                }), 400
+
+
+            # =====================================
+            # 4. BUSCAR STOCK Y UBICACIÓN
+            # =====================================
 
             consulta_stock = """
                 SELECT
@@ -901,31 +1115,59 @@ def devolver_pedido(id_pedido):
 
                 return jsonify({
                     "error":
-                        f"No existe stock para {nombre}"
+                        "No existe stock para el material"
                 }), 400
 
 
             id_stock = stock_actual[0]
+
             id_ubicacion = stock_actual[1]
 
 
+            # =====================================
+            # 5. DEVOLVER AL STOCK
+            # =====================================
+
             actualizar_stock = """
                 UPDATE stock
-                SET cantidad = cantidad + %s
+                SET cantidad =
+                    cantidad + %s
                 WHERE id_stock = %s
             """
 
             cursor.execute(
                 actualizar_stock,
                 (
-                    cantidad_devuelta,
+                    cantidad_nueva,
                     id_stock
                 )
             )
 
 
             # =====================================
-            # 4. REGISTRAR MOVIMIENTO
+            # 6. ACUMULAR CANTIDAD DEVUELTA
+            # =====================================
+
+            actualizar_detalle = """
+                UPDATE detalle_pedido
+                SET cantidad_devuelta =
+                    cantidad_devuelta + %s
+                WHERE id_pedido = %s
+                AND id_material = %s
+            """
+
+            cursor.execute(
+                actualizar_detalle,
+                (
+                    cantidad_nueva,
+                    id_pedido,
+                    id_material
+                )
+            )
+
+
+            # =====================================
+            # 7. REGISTRAR MOVIMIENTO
             # =====================================
 
             registrar_movimiento = """
@@ -954,57 +1196,87 @@ def devolver_pedido(id_pedido):
                 (
                     id_material,
                     id_ubicacion,
-                    cantidad_devuelta,
+                    cantidad_nueva,
                     responsable,
-                    f"Devolución de pedido - {practica}",
+                    f"Devolución parcial - {practica}",
                     id_pedido
                 )
             )
 
 
-            # =====================================
-            # 5. ACTUALIZAR DETALLE
-            # =====================================
-
-            actualizar_detalle = """
-                UPDATE detalle_pedido
-                SET cantidad_devuelta =
-                    cantidad_entregada
-                WHERE id_pedido = %s
-                AND id_material = %s
-            """
-
-            cursor.execute(
-                actualizar_detalle,
-                (
-                    id_pedido,
-                    id_material
-                )
-            )
+            hubo_devolucion = True
 
 
         # =========================================
-        # 6. CAMBIAR ESTADO
+        # 8. VERIFICAR SI TODO FUE DEVUELTO
         # =========================================
 
-        actualizar_pedido = """
-            UPDATE pedidos
-            SET estado = 'Devuelto'
+        if not hubo_devolucion:
+
+            return jsonify({
+                "error":
+                    "Debe devolver una cantidad mayor a 0"
+            }), 400
+
+
+        consulta_pendientes = """
+            SELECT COUNT(*)
+            FROM detalle_pedido
             WHERE id_pedido = %s
+            AND cantidad_devuelta <
+                cantidad_entregada
         """
 
         cursor.execute(
-            actualizar_pedido,
+            consulta_pendientes,
             (id_pedido,)
         )
+
+        pendientes = cursor.fetchone()[0]
+
+
+        if pendientes == 0:
+
+            actualizar_estado = """
+                UPDATE pedidos
+                SET estado = 'Devuelto'
+                WHERE id_pedido = %s
+            """
+
+            cursor.execute(
+                actualizar_estado,
+                (id_pedido,)
+            )
+
+            estado_final = "Devuelto"
+
+        else:
+
+            actualizar_estado = """
+                UPDATE pedidos
+                SET estado = 'Entregado'
+                WHERE id_pedido = %s
+            """
+
+            cursor.execute(
+                actualizar_estado,
+                (id_pedido,)
+            )
+
+            estado_final = "Entregado"
 
 
         conexion.commit()
 
 
         return jsonify({
+
             "mensaje":
-                "Pedido devuelto correctamente"
+                "Devolución registrada correctamente",
+
+            "estado":
+                estado_final
+
         }), 200
 
 
@@ -1018,6 +1290,8 @@ def devolver_pedido(id_pedido):
 
 
     finally:
+
+        cursor.close()
 
         cursor.close()
 

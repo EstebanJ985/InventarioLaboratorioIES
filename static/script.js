@@ -196,6 +196,40 @@ const cancelarAltaMaterial =
 const formAltaMaterial =
     document.getElementById("formAltaMaterial");
 
+/* DEVOLCION CON BAJAS */
+
+const modalDevolucion =
+    document.getElementById(
+        "modalDevolucion"
+    );
+
+const cerrarModalDevolucion =
+    document.getElementById(
+        "cerrarModalDevolucion"
+    );
+
+const cancelarDevolucion =
+    document.getElementById(
+        "cancelarDevolucion"
+    );
+
+const confirmarDevolucion =
+    document.getElementById(
+        "confirmarDevolucion"
+    );
+
+const materialesDevolucion =
+    document.getElementById(
+        "materialesDevolucion"
+    );
+
+const infoPedidoDevolucion =
+    document.getElementById(
+        "infoPedidoDevolucion"
+    );
+
+let pedidoDevolucionActual = null;
+
 
 /* ======================================================
    ARMARIOS
@@ -499,7 +533,10 @@ function mostrarInventario() {
             </td>
 
             <td>
-                ${producto.stock}
+                ${formatearCantidad(
+                    producto.stock,
+                    producto.unidad_medida
+                )}
             </td>
 
             <td>
@@ -519,6 +556,41 @@ function mostrarInventario() {
 
     });
 
+}
+
+
+/* ======================================================
+    FORMATEAR CANTIDADES
+====================================================== */
+
+function formatearCantidad(cantidad, unidad) {
+
+    const valor = Number(cantidad);
+
+    const unidadNormalizada =
+        unidad
+            ? unidad.toLowerCase().trim()
+            : "";
+
+    const unidadesEnteras = [
+        "unidad",
+        "unidades",
+        "u",
+        "pieza",
+        "piezas",
+        "caja",
+        "cajas"
+    ];
+
+    if (
+        unidadesEnteras.includes(
+            unidadNormalizada
+        )
+    ) {
+        return Math.round(valor);
+    }
+
+    return valor.toFixed(3);
 }
 
 
@@ -1291,16 +1363,11 @@ function mostrarPedidos() {
     contenedorPedidos.innerHTML = "";
 
     if (pedidos.length === 0) {
-
-        pedidosVacio.style.display =
-            "block";
-
+        pedidosVacio.style.display = "block";
         return;
     }
 
-    pedidosVacio.style.display =
-        "none";
-
+    pedidosVacio.style.display = "none";
 
     pedidos.forEach(pedido => {
 
@@ -1309,23 +1376,13 @@ function mostrarPedidos() {
 
         tarjeta.classList.add("pedido");
 
-
-        /*
-            Ordenamos los materiales
-            según armario.
-        */
-
         const materialesOrdenados =
-            [...pedido.materiales]
-                .sort(
-                    (a, b) =>
-                        a.armario -
-                        b.armario
-                );
-
+            [...pedido.materiales].sort(
+                (a, b) =>
+                    a.armario - b.armario
+            );
 
         let listado = "";
-
 
         materialesOrdenados.forEach(
             material => {
@@ -1338,7 +1395,10 @@ function mostrarPedidos() {
                             Armario ${material.armario}
                         </strong>
 
-                        ${material.cantidad}
+                        ${formatearCantidad(
+                            material.cantidad,
+                            material.unidad_medida
+                        )}
                         ×
                         ${material.nombre}
 
@@ -1388,9 +1448,7 @@ function mostrarPedidos() {
 
 
             <div class="lista-pedido">
-
                 ${listado}
-
             </div>
 
 
@@ -1421,6 +1479,7 @@ function mostrarPedidos() {
                     : ""
             }
 
+
             ${
                 pedido.estado === "Entregado"
                     ? `
@@ -1432,7 +1491,7 @@ function mostrarPedidos() {
                         </button>
                     `
                     : ""
-}
+            }
 
         `;
 
@@ -1442,6 +1501,82 @@ function mostrarPedidos() {
         );
 
     });
+
+
+    const botonesPreparar =
+        document.querySelectorAll(
+            ".btn-preparar"
+        );
+
+    botonesPreparar.forEach(boton => {
+
+        boton.addEventListener(
+            "click",
+            () => {
+
+                const idPedido =
+                    Number(
+                        boton.dataset.id
+                    );
+
+                prepararPedido(idPedido);
+
+            }
+        );
+
+    });
+
+
+    const botonesEntregar =
+        document.querySelectorAll(
+            ".btn-entregar"
+        );
+
+    botonesEntregar.forEach(boton => {
+
+        boton.addEventListener(
+            "click",
+            () => {
+
+                const idPedido =
+                    Number(
+                        boton.dataset.id
+                    );
+
+                entregarPedido(idPedido);
+
+            }
+        );
+
+    });
+
+
+    const botonesDevolver =
+        document.querySelectorAll(
+            ".btn-devolver"
+        );
+
+    botonesDevolver.forEach(boton => {
+
+        boton.addEventListener(
+            "click",
+            () => {
+
+                const idPedido =
+                    Number(
+                        boton.dataset.id
+                    );
+
+                abrirModalDevolucion(
+                    idPedido
+                );
+
+            }
+        );
+
+    });
+
+}
 
 
     /* =========================================
@@ -1491,14 +1626,14 @@ function mostrarPedidos() {
                         boton.dataset.id
                     );
 
-                devolverPedido(
+                abrirModalDevolucion(
                     idPedido
                 );
 
             }
         );
 
-});
+    });
 
     /* =========================================
        BOTONES ENTREGAR
@@ -1530,8 +1665,408 @@ function mostrarPedidos() {
 
     });
 
+
+
+
+function abrirModalDevolucion(idPedido) {
+
+    const pedido =
+        pedidos.find(
+            item =>
+                item.id === idPedido
+        );
+
+    if (!pedido) {
+
+        mostrarNotificacion(
+            "No se encontró el pedido",
+            "error"
+        );
+
+        return;
+    }
+
+    pedidoDevolucionActual =
+        pedido;
+
+    infoPedidoDevolucion.textContent =
+        `Pedido #${String(
+            pedido.id
+        ).padStart(4, "0")} - ${pedido.practica}`;
+
+    materialesDevolucion.innerHTML =
+        "";
+
+
+    pedido.materiales.forEach(
+        material => {
+
+            const contenedor =
+                document.createElement(
+                    "div"
+                );
+
+            contenedor.classList.add(
+                "item-devolucion"
+            );
+
+
+            const unidad =
+                material.unidad_medida || "";
+
+
+            const esEntero =
+                [
+                    "unidad",
+                    "unidades",
+                    "u",
+                    "pieza",
+                    "piezas",
+                    "caja",
+                    "cajas"
+                ].includes(
+                    unidad
+                        .toLowerCase()
+                        .trim()
+                );
+
+
+            const step =
+                esEntero
+                    ? "1"
+                    : "0.001";
+
+
+            contenedor.innerHTML = `
+
+                <div class="devolucion-material-header">
+
+                    <div>
+
+                        <strong class="devolucion-material-nombre">
+                            ${material.nombre}
+                        </strong>
+
+                        <span class="devolucion-material-codigo">
+                            ${material.codigo || ""}
+                        </span>
+
+                    </div>
+
+                    <span class="devolucion-unidad">
+                        ${unidad}
+                    </span>
+
+                </div>
+
+
+                <div class="devolucion-resumen">
+
+                    <div class="devolucion-dato">
+
+                        <span>
+                            Entregado
+                        </span>
+
+                        <strong>
+                            ${formatearCantidad(
+                                material.cantidad,
+                                unidad
+                            )}
+                            ${unidad}
+                        </strong>
+
+                    </div>
+
+
+                    <div class="devolucion-dato devolucion-dato-input">
+
+                        <label>
+                            Cantidad devuelta
+                        </label>
+
+                        <div class="input-cantidad-grupo">
+
+                            <input
+                                type="number"
+                                step="${step}"
+                                min="0"
+                                max="${material.cantidad}"
+                                class="cantidad-devuelta"
+                                data-id-material="${material.productoId}"
+                                data-entregado="${material.cantidad}"
+                                data-unidad="${unidad}"
+                                value="0"
+                            >
+
+                            <span>
+                                ${unidad}
+                            </span>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="devolucion-dato devolucion-consumido">
+
+                        <span>
+                            Consumido
+                        </span>
+
+                        <strong class="cantidad-consumida">
+                            ${formatearCantidad(
+                                material.cantidad,
+                                unidad
+                            )}
+                            ${unidad}
+                        </strong>
+
+                    </div>
+
+                </div>
+
+            `;
+
+
+            materialesDevolucion.appendChild(
+                contenedor
+            );
+
+        }
+    );
+
+
+    modalDevolucion.style.display =
+        "flex";
+
+
+    const inputs =
+        document.querySelectorAll(
+            ".cantidad-devuelta"
+        );
+
+
+    inputs.forEach(input => {
+
+        input.addEventListener(
+            "input",
+            () => {
+
+                const entregado =
+                    Number(
+                        input.dataset.entregado
+                    );
+
+                const devuelto =
+                    Number(
+                        input.value
+                    );
+
+                const consumido =
+                    Math.max(
+                        entregado - devuelto,
+                        0
+                    );
+
+
+                const textoConsumido =
+                    input
+                        .closest(
+                            ".devolucion-resumen"
+                        )
+                        .querySelector(
+                            ".cantidad-consumida"
+                        );
+
+
+                const unidad =
+                    input.dataset.unidad || "";
+
+
+                textoConsumido.textContent =
+                    `${formatearCantidad(
+                        consumido,
+                        unidad
+                    )} ${unidad}`;
+
+            }
+        );
+
+    });
+
 }
 
+function cerrarDevolucion() {
+
+    modalDevolucion.style.display =
+        "none";
+
+    pedidoDevolucionActual =
+        null;
+
+}
+
+cerrarModalDevolucion.addEventListener(
+    "click",
+    cerrarDevolucion
+);
+
+cancelarDevolucion.addEventListener(
+    "click",
+    cerrarDevolucion
+);
+
+
+confirmarDevolucion.addEventListener(
+    "click",
+    async () => {
+
+        if (!pedidoDevolucionActual) {
+            return;
+        }
+
+        const inputs =
+            document.querySelectorAll(
+                ".cantidad-devuelta"
+            );
+
+        const devoluciones = [];
+
+        let valido = true;
+
+
+        inputs.forEach(input => {
+
+            const idMaterial =
+                Number(
+                    input.dataset.idMaterial
+                );
+
+            const entregado =
+                Number(
+                    input.dataset.entregado
+                );
+
+            const devuelto =
+                Number(
+                    input.value
+                );
+
+
+            if (
+                devuelto < 0 ||
+                devuelto > entregado
+            ) {
+
+                mostrarNotificacion(
+                    "La cantidad devuelta no puede superar la cantidad entregada.",
+                    "error"
+                );
+
+                valido = false;
+
+                return;
+            }
+
+
+            devoluciones.push({
+
+                id_material:
+                    idMaterial,
+
+                cantidad_devuelta:
+                    devuelto
+
+            });
+
+        });
+
+
+        if (!valido) {
+            return;
+        }
+
+
+        await devolverPedidoParcial(
+            pedidoDevolucionActual.id,
+            devoluciones
+        );
+
+    }
+);
+
+
+async function devolverPedidoParcial(
+    idPedido,
+    devoluciones
+) {
+
+    try {
+
+        const respuesta =
+            await fetch(
+                `/api/pedidos/${idPedido}/devolver`,
+                {
+                    method: "PATCH",
+
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body:
+                        JSON.stringify({
+                            devoluciones
+                        })
+                }
+            );
+
+
+        const resultado =
+            await respuesta.json();
+
+
+        if (!respuesta.ok) {
+
+            throw new Error(
+                resultado.error ||
+                "No se pudo registrar la devolución"
+            );
+
+        }
+
+
+        mostrarNotificacion(
+            "Devolución registrada correctamente",
+            "success"
+        );
+
+
+        cerrarDevolucion();
+
+        await cargarPedidos();
+
+        await cargarInventario();
+
+        await cargarMovimientos();
+
+
+    } catch (error) {
+
+        console.error(
+            "Error al registrar devolución:",
+            error
+        );
+
+        mostrarNotificacion(
+            error.message,
+            "error"
+        );
+
+    }
+
+}
 
 /* ======================================================
    PREPARAR PEDIDO
@@ -2077,7 +2612,10 @@ function mostrarMovimientos(movimientos) {
                 </td>
 
                 <td>
-                    ${movimiento.cantidad}
+                    ${formatearCantidad(
+                        movimiento.cantidad,
+                        movimiento.unidad_medida
+                    )}
                 </td>
 
                 <td>

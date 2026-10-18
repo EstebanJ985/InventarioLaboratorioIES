@@ -841,6 +841,70 @@
 
 </div>
 
+<!-- ======================================================
+     MODAL DEVOLUCIÓN PARCIAL
+====================================================== -->
+
+<div
+    id="modalDevolucion"
+    class="modal"
+    style="display: none;"
+>
+
+    <div class="modal-contenido">
+
+        <div class="modal-header">
+
+            <h2>
+                Registrar devolución
+            </h2>
+
+            <button
+                type="button"
+                id="cerrarModalDevolucion"
+                class="modal-cerrar"
+            >
+                ×
+            </button>
+
+        </div>
+
+
+        <p id="infoPedidoDevolucion"></p>
+
+
+        <div
+            id="materialesDevolucion"
+            class="materiales-devolucion"
+        >
+        </div>
+
+
+        <div class="modal-acciones">
+
+            <button
+                type="button"
+                id="cancelarDevolucion"
+                class="btn-devolucion-cancelar"
+            >
+                Cancelar
+            </button>
+
+            <button
+                type="button"
+                id="confirmarDevolucion"
+                class="btn-devolucion-confirmar"
+            >
+                Confirmar devolución
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 
 </body>
